@@ -4,11 +4,11 @@ from embedder import embed_chunks
 from vectorstore import store_in_pinecone
 from typing import List
 
-pdf_path = "./resources/HRPolicy.pdf"
+pdf_path = "./resources/KubernetesAPMandInfrastructureRunbooks.pdf"
 
 
 def run():
-    # Read HR Policy PDF and extract text
+    # Read Kubernetes APM and Infrastructure Runbooks PDF and extract text
     pages = read_pdf(pdf_path)
 
     # Chunk the data into smaller pieces
