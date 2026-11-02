@@ -2,3 +2,12 @@ pypdf
 openai
 pinecone
 python-dotenv
+fastapi 
+uvicorn 
+langgraph 
+langchain-core 
+langchain-groq 
+langchain-community 
+langchain-huggingface 
+faiss-cpu 
+sentence-transformers
