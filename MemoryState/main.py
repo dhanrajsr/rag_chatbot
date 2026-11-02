@@ -149,6 +149,8 @@ async def chat_endpoint(request: ChatRequest):
         
         # Running the LangGraph application with config
         output = rag_multi_agent_app.invoke(initial_input, config=config)
+
+        clean_solution = output["solution"].replace("\\n", "\n")
         
         return {
             "query": request.query,
