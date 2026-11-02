@@ -1,5 +1,4 @@
 # . Checkpointing & State Persistence (நினைவகப் பாதுகாப்பு & தொடர்ச்சி)
-
 import os
 from typing import TypedDict
 from fastapi import FastAPI, HTTPException
@@ -21,7 +20,7 @@ os.environ["GROQ_API_KEY"] = "your-groq-api-key-here"
 llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0.1)
 embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
-# 2. PDF ஃபைல்களைப் படித்து FAISS Vector DB உருவாக்குதல்
+# 2. Read PDF files and create FAISS Vector DB
 pdf_folder_path = "./runbooks_pdf"
 os.makedirs(pdf_folder_path, exist_ok=True)
 
@@ -50,7 +49,7 @@ class RAGAgentState(TypedDict):
 # 4. Nodes (Agents)
 def rag_search_node(state: RAGAgentState):
     query = state["query"]
-    print(f"\n🔍 [RAG Search Agent]: '{query}' தொடர்பான தகவல்களைத் தேடுகிறது...")
+    print(f"\n🔍 [RAG Search Agent]: Searching for information related to '{query}'...")
     retrieved = retriever.invoke(query)
     context = "\n".join([doc.page_content for doc in retrieved])
     return {"retrieved_docs": context}
@@ -62,12 +61,12 @@ def draft_solution_node(state: RAGAgentState):
     review = state.get("review_comment", "")
     count = state.get("iteration_count", 0)
     
-    print(f"\n📝 [Drafting Agent]: தீர்வை உருவாக்குகிறது (சுற்று: {count + 1})...")
+    print(f"\n📝 [Drafting Agent]: Drafting solution (Iteration: {count + 1})...")
     
     if review:
-        prompt = f"பிரச்சனை: {query}\nடாக்குமெண்ட்: {docs}\nமறுஆய்வு கருத்து: {review}\nபாதுகாப்பான புதிய தீர்வை எழுதவும்."
+        prompt = f"Problem: {query}\nDocument: {docs}\nReview Feedback: {review}\nPlease write a secure new solution."
     else:
-        prompt = f"பிரச்சனை: {query}\nகீழ்க்காணும் டாக்குமெண்ட் தகவலைப் பயன்படுத்தி தீர்வை எழுதவும்:\n{docs}"
+        prompt = f"Problem: {query}\nWrite a solution using the following document information:\n{docs}"
         
     response = llm.invoke([HumanMessage(content=prompt)])
     return {"solution": response.content, "iteration_count": count + 1}
@@ -75,9 +74,9 @@ def draft_solution_node(state: RAGAgentState):
 
 def security_review_node(state: RAGAgentState):
     solution = state["solution"]
-    print("\n🛡️ [Security Reviewer Agent]: தீர்வை மதிப்பீடு செய்கிறது...")
+    print("\n🛡️ [Security Reviewer Agent]: Evaluating the solution...")
     
-    prompt = f"கீழ்க்கண்ட தீர்வைச் சரிபார்க்கவும். பாதுகாப்பாக இருந்தால் 'APPROVED' எனக் கூறவும். இல்லையெனில் திருத்தத்தைக் கூறவும்:\n\n{solution}"
+    prompt = f"Check the following solution. If it is safe, reply with 'APPROVED'. Otherwise, state the required corrections:\n\n{solution}"
     response = llm.invoke([HumanMessage(content=prompt)])
     return {"review_comment": response.content}
 
@@ -100,7 +99,6 @@ workflow.add_node("security_review", security_review_node)
 
 workflow.add_edge(START, "rag_search")
 workflow.add_edge("rag_search", "draft_solution")
-workflow.add_edge.add_edge if hasattr(workflow.add_edge, 'add_edge') else None # syntax placeholder
 workflow.add_edge("draft_solution", "security_review")
 
 workflow.add_conditional_edges(
@@ -109,7 +107,7 @@ workflow.add_conditional_edges(
     {"rewrite": "draft_solution", "finish": END}
 )
 
-# 💡 MemorySaver-ஐ இணைத்தல் (இதுதான் Checkpointing செய்கிறது)
+# 💡 Integrating MemorySaver (Handles checkpointing)
 memory = MemorySaver()
 rag_multi_agent_app = workflow.compile(checkpointer=memory)
 
@@ -117,14 +115,14 @@ rag_multi_agent_app = workflow.compile(checkpointer=memory)
 # 7. FastAPI Setup
 app = FastAPI(
     title="Checkpoint-enabled IT Support Multi-Agent RAG API",
-    description="LangGraph Checkpointer உடன் இயக்கப்படும் ஐடி ஏஜெண்ட் செயலி",
+    description="IT agent application powered with LangGraph Checkpointer",
     version="2.0"
 )
 
 # Request & Response Models with thread_id
 class ChatRequest(BaseModel):
     query: str
-    thread_id: str = "default_user_session"  # ஒவ்வொரு செஷனுக்கும் தனித்தனி ID
+    thread_id: str = "default_user_session"  # Unique ID for each session
 
 class ChatResponse(BaseModel):
     query: str
@@ -146,10 +144,10 @@ async def chat_endpoint(request: ChatRequest):
             "iteration_count": 0
         }
         
-        # 💡 thread_id அடிப்படையிலான Config உருவாக்கம்
+        # 💡 Creating config based on thread_id
         config = {"configurable": {"thread_id": request.thread_id}}
         
-        # LangGraph செயலியை config உடன் இயக்குதல்
+        # Running the LangGraph application with config
         output = rag_multi_agent_app.invoke(initial_input, config=config)
         
         return {
