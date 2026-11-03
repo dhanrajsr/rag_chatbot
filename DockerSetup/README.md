@@ -1,7 +1,8 @@
-Production-Grade Multi-Agent RAG System for IT/DevOps Support
+# Production-Grade Multi-Agent RAG System for DevOps Support
 ​An enterprise-ready, containerized Multi-Agent Retrieval-Augmented Generation (RAG) system built with FastAPI, LangGraph, and LangChain. Powered by Qwen 27B (via Groq API), this system ingests internal IT PDF runbooks, provides autonomous problem resolution through dynamic cyclic workflows, enforces security reviews, supports real-time streaming via Server-Sent Events (SSE), and incorporates Human-in-the-Loop (HITL) approval before executing changes.
-​🌟 Key Features
-​Multi-Agent Orchestration: Modular workflow managed by LangGraph:
+# Key Features
+##​Multi-Agent Orchestration: 
+###Modular workflow managed by LangGraph:
 ​RAG Search Agent: Retrieves relevant context from indexed PDF runbooks.
 ​Drafting Agent: Generates actionable, step-by-step resolution plans.
 ​Security Reviewer Agent: Evaluates proposed solutions against enterprise security standards.
