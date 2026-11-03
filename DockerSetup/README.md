@@ -22,6 +22,14 @@
 
 # Repository Structure
 
+.
+├── main.py              # Core application entrypoint (FastAPI + LangGraph)
+├── Dockerfile           # Python 3.9 container definition
+├── docker-compose.yml   # Multi-container orchestration and volume management
+├── requirements.txt     # Python dependency lockfile
+├── .env                 # Environment secrets file
+├── runbooks_pdf/        # Volume directory for source PDF runbooks
+└── faiss_index/         # Persisted local vector store data
 
 
 # Steps 
