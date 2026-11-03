@@ -3,11 +3,12 @@ version: '3.8'
 services:
   rag-agent-api:
     build: .
-    container_name: it-support-rag-agent
+    container_name: support-rag-agent
     ports:
       - "8000:8000"
     volumes:
-      - ./runbooks_pdf:/app/runbooks_pdf  # லோக்கல் PDF ஃபோல்டரை கண்டெய்னருடன் இணைத்தல்
-    environment:
-      - GROQ_API_KEY=xxx
+      - ./runbooks_pdf:/app/runbooks_pdf
+      - ./faiss_index:/app/faiss_index
+    env_file:
+      - .env
     restart: always
