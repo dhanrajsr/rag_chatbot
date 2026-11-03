@@ -20,8 +20,9 @@
 ### ​Document Processing: PyPDF (PyPDFDirectoryLoader), RecursiveCharacterTextSplitter
 ​### Containerization: Docker, Docker Compose
 
-# Repository Structure
+## 📂 Repository Structure
 
+```text
 .
 ├── main.py              # Core application entrypoint (FastAPI + LangGraph)
 ├── Dockerfile           # Python 3.9 container definition
