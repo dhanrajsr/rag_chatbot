@@ -184,6 +184,8 @@ docker-compose.yml: To manage the container and mount the local PDF folder (runb
 runbooks_pdf/: The local folder where you need to place your PDF runbooks.
 
 # docker compose run
+Make sure you have main.py (FastAPI) and app.py (Streamlit) in your project root.
+
 docker-compose up --build
 
 # URL
