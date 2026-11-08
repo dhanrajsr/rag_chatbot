@@ -12,6 +12,7 @@ from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver  # Checkpoint memory import
+from langgraph.graph import MessagesState
 
 # 1. API Keys & LLM/Embeddings Initialization
 os.environ["GROQ_API_KEY"] = "xxxxxx"
@@ -39,6 +40,7 @@ retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
 # 3. State
 class RAGAgentState(TypedDict):
     query: str
+    chat_history: list
     retrieved_docs: str
     solution: str
     review_comment: str
