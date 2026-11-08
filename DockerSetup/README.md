@@ -164,6 +164,11 @@ curl -X POST "http://localhost:8000/approve" \
 
 ---
 
+```
+<img width="402" height="771" alt="image" src="https://github.com/user-attachments/assets/cce67144-db0a-443d-a1fe-a9b58c0fb7ba" />
+
+```
+
 ## 📄 License
 
 Distributed under the MIT License. See `LICENSE` for more information.
