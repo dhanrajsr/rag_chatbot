@@ -1,22 +1,29 @@
 fastapi
-uvicorn
+uvicorn[standard]
 
 streamlit
 requests
 
 langchain
 langchain-core
-langchain-groq
 langchain-community
+langchain-groq
 langchain-huggingface
 
 langgraph
 
-sentence-transformers=
-huggingface-hub
-
 faiss-cpu
+
+sentence-transformers
+
 pypdf
+
+sqlalchemy
+psycopg2-binary
+
+python-jose
+passlib[bcrypt]
+bcrypt
 
 python-multipart
 python-dotenv
