@@ -1,129 +1,282 @@
 import os
-from typing import TypedDict
+from typing import TypedDict, Annotated
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from langchain_groq import ChatGroq
-from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import PyPDFDirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+
 from langchain_core.documents import Document
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import (
+    HumanMessage,
+    AIMessage,
+    BaseMessage
+)
+
 from langgraph.graph import StateGraph, START, END
-from langgraph.checkpoint.memory import MemorySaver  # Checkpoint memory import
-from langgraph.graph import MessagesState
+from langgraph.graph.message import add_messages
+from langgraph.checkpoint.memory import MemorySaver
 
-# 1. API Keys & LLM/Embeddings Initialization
-os.environ["GROQ_API_KEY"] = "xxxxxx"
 
-llm = ChatGroq(model="qwen/qwen3.8-27b", temperature=0.1, max_tokens=500)
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+# ==========================================================
+# LLM & Embeddings
+# ==========================================================
 
-# 2. Read PDF files and create FAISS Vector DB
+os.environ["GROQ_API_KEY"] = "YOUR_GROQ_KEY"
+
+llm = ChatGroq(
+    model="qwen/qwen3-32b",
+    temperature=0.1,
+    max_tokens=500
+)
+
+embeddings = HuggingFaceEmbeddings(
+    model_name="all-MiniLM-L6-v2"
+)
+
+# ==========================================================
+# Load PDFs
+# ==========================================================
+
 pdf_folder_path = "./runbooks_pdf"
+
 os.makedirs(pdf_folder_path, exist_ok=True)
 
 loader = PyPDFDirectoryLoader(pdf_folder_path)
+
 raw_documents = loader.load()
 
-if len(raw_documents) > 0:
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    docs = text_splitter.split_documents(raw_documents)
+if raw_documents:
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1000,
+        chunk_overlap=200
+    )
+
+    docs = splitter.split_documents(raw_documents)
+
 else:
-    docs = [Document(page_content="No PDF runbooks found.", metadata={"source": "empty"})]
+    docs = [
+        Document(
+            page_content="No runbooks found.",
+            metadata={"source": "empty"}
+        )
+    ]
 
 vectorstore = FAISS.from_documents(docs, embeddings)
-retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
 
+retriever = vectorstore.as_retriever(
+    search_kwargs={"k": 3}
+)
 
-# 3. State
-class RAGAgentState(TypedDict):
-    query: str
-    chat_history: list
+# ==========================================================
+# State Definition
+# ==========================================================
+
+class RAGState(TypedDict):
+    messages: Annotated[list[BaseMessage], add_messages]
     retrieved_docs: str
     solution: str
     review_comment: str
     iteration_count: int
 
+# ==========================================================
+# Node 1 - RAG Search
+# ==========================================================
 
-# 4. Nodes (Agents)
-def rag_search_node(state: RAGAgentState):
-    query = state["query"]
-    print(f"\n🔍 [RAG Search Agent]: Searching for information related to '{query}'...")
-    retrieved = retriever.invoke(query)
-    context = "\n".join([doc.page_content for doc in retrieved])
-    return {"retrieved_docs": context}
+def rag_search_node(state: RAGState):
 
+    latest_question = None
 
-def draft_solution_node(state: RAGAgentState):
-    query = state["query"]
-    docs = state["retrieved_docs"]
-    review = state.get("review_comment", "")
+    for msg in reversed(state["messages"]):
+        if isinstance(msg, HumanMessage):
+            latest_question = msg.content
+            break
+
+    docs = retriever.invoke(latest_question)
+
+    context = "\n\n".join(
+        [doc.page_content for doc in docs]
+    )
+
+    return {
+        "retrieved_docs": context
+    }
+
+# ==========================================================
+# Node 2 - Draft Solution
+# ==========================================================
+
+def draft_solution_node(state: RAGState):
+
     count = state.get("iteration_count", 0)
-    
-    print(f"\n📝 [Drafting Agent]: Drafting solution (Iteration: {count + 1})...")
-    
+
+    messages = state["messages"]
+
+    docs = state["retrieved_docs"]
+
+    review = state.get("review_comment", "")
+
+    conversation = "\n".join(
+        [
+            f"{type(m).__name__}: {m.content}"
+            for m in messages[-10:]
+        ]
+    )
+
     if review:
-        prompt = f"Problem: {query}\nDocument: {docs}\nReview Feedback: {review}\nPlease write a secure new solution."
+
+        prompt = f"""
+Conversation History:
+{conversation}
+
+Runbook Context:
+{docs}
+
+Security Feedback:
+{review}
+
+Provide an improved answer.
+"""
+
     else:
-        prompt = f"Problem: {query}\nWrite a solution using the following document information:\n{docs}"
-        
-    response = llm.invoke([HumanMessage(content=prompt)])
-    return {"solution": response.content, "iteration_count": count + 1}
 
+        prompt = f"""
+Conversation History:
+{conversation}
 
-def security_review_node(state: RAGAgentState):
+Runbook Context:
+{docs}
+
+Answer the user's latest question using
+conversation context and runbook data.
+"""
+
+    response = llm.invoke(
+        [HumanMessage(content=prompt)]
+    )
+
+    return {
+        "solution": response.content,
+        "iteration_count": count + 1,
+        "messages": [
+            AIMessage(content=response.content)
+        ]
+    }
+
+# ==========================================================
+# Node 3 - Security Review
+# ==========================================================
+
+def security_review_node(state: RAGState):
+
     solution = state["solution"]
-    print("\n🛡️ [Security Reviewer Agent]: Evaluating the solution...")
-    
-    prompt = f"Check the following solution. If it is safe, reply with 'APPROVED'. Otherwise, state the required corrections:\n\n{solution}"
-    response = llm.invoke([HumanMessage(content=prompt)])
-    return {"review_comment": response.content}
 
+    review_prompt = f"""
+Check this answer.
 
-# 5. Conditional Edge
-def evaluate_review(state: RAGAgentState):
+If safe and correct reply exactly:
+
+APPROVED
+
+Otherwise provide corrections.
+
+Answer:
+
+{solution}
+"""
+
+    response = llm.invoke(
+        [HumanMessage(content=review_prompt)]
+    )
+
+    return {
+        "review_comment": response.content
+    }
+
+# ==========================================================
+# Decision Logic
+# ==========================================================
+
+def evaluate_review(state: RAGState):
+
     review = state["review_comment"]
+
     count = state["iteration_count"]
-    
-    if "APPROVED" in review.upper() or count >= 2:
+
+    if "APPROVED" in review.upper():
         return "finish"
+
+    if count >= 2:
+        return "finish"
+
     return "rewrite"
 
+# ==========================================================
+# Build Graph
+# ==========================================================
 
-# 6. Workflow Compilation with Checkpointer (MEMORY SAVER)
-workflow = StateGraph(RAGAgentState)
-workflow.add_node("rag_search", rag_search_node)
-workflow.add_node("draft_solution", draft_solution_node)
-workflow.add_node("security_review", security_review_node)
+workflow = StateGraph(RAGState)
 
-workflow.add_edge(START, "rag_search")
-workflow.add_edge("rag_search", "draft_solution")
-workflow.add_edge("draft_solution", "security_review")
+workflow.add_node(
+    "rag_search",
+    rag_search_node
+)
+
+workflow.add_node(
+    "draft_solution",
+    draft_solution_node
+)
+
+workflow.add_node(
+    "security_review",
+    security_review_node
+)
+
+workflow.add_edge(
+    START,
+    "rag_search"
+)
+
+workflow.add_edge(
+    "rag_search",
+    "draft_solution"
+)
+
+workflow.add_edge(
+    "draft_solution",
+    "security_review"
+)
 
 workflow.add_conditional_edges(
     "security_review",
     evaluate_review,
-    {"rewrite": "draft_solution", "finish": END}
+    {
+        "rewrite": "draft_solution",
+        "finish": END
+    }
 )
 
-# 💡 Integrating MemorySaver (Handles checkpointing)
 memory = MemorySaver()
-rag_multi_agent_app = workflow.compile(checkpointer=memory)
 
-
-# 7. FastAPI Setup
-app = FastAPI(
-    title="Checkpoint-enabled IT Support Multi-Agent RAG API",
-    description="IT agent application powered with LangGraph Checkpointer",
-    version="2.0"
+rag_app = workflow.compile(
+    checkpointer=memory
 )
 
-# Request & Response Models with thread_id
+# ==========================================================
+# FastAPI
+# ==========================================================
+
+app = FastAPI(
+    title="RAG Memory Chatbot"
+)
+
 class ChatRequest(BaseModel):
     query: str
-    thread_id: str = "default_user_session"  # Unique ID for each session
+    thread_id: str
 
 class ChatResponse(BaseModel):
     query: str
@@ -132,33 +285,43 @@ class ChatResponse(BaseModel):
     review_comment: str
     iteration_count: int
 
-
-# 8. POST /chat Endpoint
 @app.post("/chat", response_model=ChatResponse)
-async def chat_endpoint(request: ChatRequest):
-    try:
-        initial_input = {
-            "query": request.query,
-            "retrieved_docs": "",
-            "solution": "",
-            "review_comment": "",
-            "iteration_count": 0
-        }
-        
-        # 💡 Creating config based on thread_id
-        config = {"configurable": {"thread_id": request.thread_id}}
-        
-        # Running the LangGraph application with config
-        output = rag_multi_agent_app.invoke(initial_input, config=config)
+async def chat(request: ChatRequest):
 
-        clean_solution = output["solution"].replace("\\n", "\n")
-        
+    try:
+
+        config = {
+            "configurable": {
+                "thread_id": request.thread_id
+            }
+        }
+
+        result = rag_app.invoke(
+            {
+                "messages": [
+                    HumanMessage(
+                        content=request.query
+                    )
+                ],
+                "retrieved_docs": "",
+                "solution": "",
+                "review_comment": "",
+                "iteration_count": 0
+            },
+            config=config
+        )
+
         return {
             "query": request.query,
             "thread_id": request.thread_id,
-            "solution": output["solution"],
-            "review_comment": output["review_comment"],
-            "iteration_count": output["iteration_count"]
+            "solution": result["solution"],
+            "review_comment": result["review_comment"],
+            "iteration_count": result["iteration_count"]
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
+    except Exception as ex:
+
+        raise HTTPException(
+            status_code=500,
+            detail=str(ex)
+        )
