@@ -169,6 +169,14 @@ curl -X POST "http://localhost:8000/approve" \
 
 Distributed under the MIT License. See `LICENSE` for more information.
 
+ ✅ User Registration
+ ✅ User Login (JWT)
+ ✅ Password Hashing (bcrypt)
+ ✅ User-specific Chat Sessions
+ ✅ LangGraph Memory
+ ✅ PostgreSQL Chat History
+ ✅ RAG Search from PDF Runbooks
+ ✅ FastAPI Backend
 
 # Steps 
 
