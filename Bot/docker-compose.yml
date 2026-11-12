@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  rag-agent-api:
+    build: .
+    container_name: it-support-rag-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./runbooks_pdf:/app/runbooks_pdf
+      - ./faiss_index:/app/faiss_index
+    env_file:
+      - .env
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    restart: always
+
+  rag-agent-ui:
+    build: .
+    container_name: it-support-rag-ui
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./runbooks_pdf:/app/runbooks_pdf
+      - ./faiss_index:/app/faiss_index
+    env_file:
+      - .env
+    command: streamlit run app.py --server.address=0.0.0.0 --server.port=8501
+    depends_on:
+      - rag-agent-api
+    restart: always
